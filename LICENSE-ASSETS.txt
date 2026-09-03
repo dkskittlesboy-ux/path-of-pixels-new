@@ -1,0 +1,26 @@
+========================================================================
+ASSET LICENSE NOTICE (CC-BY-SA 3.0)
+========================================================================
+
+The art, graphics, animations, map files, music, and sound assets used 
+in this project are licensed under the Creative Commons Attribution-
+ShareAlike 3.0 Unported (CC-BY-SA 3.0) license.
+
+You can view a copy of this license at:
+https://creativecommons.org/licenses/by-sa/3.0/
+
+------------------------------------------------------------------------
+REQUIRED ATTRIBUTIONS
+------------------------------------------------------------------------
+
+1. Original BrowserQuest Assets
+   - Creators: Little Workshop (http://www.littleworkshop.fr/) & Mozilla
+   - Source: https://github.com/mozilla/BrowserQuest
+   - License: CC-BY-SA 3.0
+   - Modifications: [State 'None' or describe your visual/audio changes here]
+
+2. Custom Modifications / New Assets
+   - If you add new art/sound based on the original sprites, list them here.
+   - Remember: They MUST also be shared under CC-BY-SA 3.0!
+
+========================================================================

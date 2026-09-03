@@ -1,0 +1,1603 @@
+:root {
+  color-scheme: dark;
+  font-family: "PixelOperator", monospace;
+  --gold: #f6d86b;
+  --ink: #17201b;
+  --panel: rgba(18, 24, 20, 0.92);
+  --vibrance: 1.12;
+  --contrast: 1.12;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #game-shell {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #0f1210;
+}
+
+body { touch-action: none; }
+
+/* Canvas: layered high-quality backdrop + subtle bloom for richer visuals.
+   Keep sprite rendering pixelated via canvas drawing, but present a higher-res scene behind it. */
+#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  /* Use the game's thumbnail as a higher-detail backdrop to give more "depth" */
+  background:
+    radial-gradient(circle at 50% 42%, rgba(55, 92, 55, 0.52), transparent 45%),
+    linear-gradient(180deg, #273d2c 0%, #18281e 52%, #0a100c 100%);
+  /* stronger, tasteful color boost and a gentle glow */
+  filter: contrast(var(--contrast)) saturate(var(--vibrance));
+  /* slight outer glow to lift the playfield */
+  box-shadow: 0 10px 40px rgba(2,3,3,0.7), inset 0 0 48px rgba(0,0,0,0.42);
+  border-radius: 2px;
+  /* keep pixel-art crisp when the sprites are drawn; the backdrop remains photographic */
+  image-rendering: optimizeQuality;
+}
+
+/* When the device is high-DPI we allow a smoother backdrop while the in-canvas sprite rendering code still disables smoothing. */
+@media (min-resolution: 2dppx) {
+  #game { filter: contrast(calc(var(--contrast) * 1.03)) saturate(calc(var(--vibrance) * 1.05)) blur(0.02px); }
+}
+
+/* HUD and UI panels remain largely the same but get a tiny increase in polish: faint rim light and sharper borders */
+.hud-card {
+  position: fixed;
+  z-index: 4;
+  top: max(14px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 235px;
+  padding: 8px 11px 8px 8px;
+  color: #fff8d4;
+  border: 2px solid rgba(246, 216, 107, 0.72);
+  border-radius: 7px;
+  background: linear-gradient(180deg, rgba(22,28,22,0.86), rgba(12,16,12,0.75));
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.36), inset 0 0 0 1px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+#player-avatar {
+  width: 42px;
+  height: 42px;
+  object-fit: none;
+  object-position: left top;
+  border: 2px solid #604c28;
+  border-radius: 4px;
+  background: linear-gradient(180deg,#2b3a2d,#1c281c);
+  image-rendering: pixelated;
+}
+
+#player-avatar.user-avatar { object-fit: cover; object-position: center; }
+
+.player-details { flex: 1; min-width: 0; }
+
+.name-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  font-size: 17px;
+  letter-spacing: 0.2px;
+}
+
+#player-name {
+  overflow: hidden;
+  max-width: 145px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 2px 2px rgba(0,0,0,0.85);
+}
+
+#connection {
+  color: #9fe8b7;
+  font-size: 12px;
+}
+
+#connection.offline { color: #d1c7a6; }
+
+.health-track {
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,0.6);
+  background: linear-gradient(90deg,#3b1d1b,#2a1413);
+}
+
+#health-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(#ff8a70, #d94a3f);
+  transition: width 150ms ease-out;
+  box-shadow: inset 0 -2px 6px rgba(0,0,0,0.35);
+}
+
+#equipment {
+  margin-top: 4px;
+  color: #d7cfa8;
+  font-size: 11px;
+}
+
+.top-actions {
+  position: fixed;
+  z-index: 5;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  display: grid;
+  grid-template-columns: repeat(4, 40px);
+  grid-template-rows: 40px 40px;
+  gap: 8px;
+}
+
+.round-button {
+  width: 40px;
+  height: 40px;
+  color: #e6d8b5;
+  border: 2px solid #6b5d3d;
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(28,34,28,0.96), rgba(18,22,18,0.96));
+  font: 20px "PixelOperator", monospace;
+  cursor: pointer;
+}
+
+/* shop button uses currency glyph style */
+#shop-button { grid-area: 1 / 4; font-size: 18px; }
+
+/* shop modal styling */
+#shop-modal {
+  width: min(420px, calc(100vw - 28px));
+  padding: 0;
+  color: #fff8d4;
+  border: 2px solid #9a7f49;
+  border-radius: 7px;
+  background: linear-gradient(180deg,#18231a,#0f1811);
+  box-shadow: 0 8px 0 rgba(0,0,0,0.42), inset 0 0 0 1px rgba(255, 235, 165, .04);
+  font: 15px "PixelOperator", monospace;
+}
+#shop-list .shop-entry {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:8px;
+  border:1px solid #3f3a29;
+  border-radius:6px;
+  background:linear-gradient(180deg,#2b3529,#1e281d);
+}
+#shop-list .shop-entry button {
+  padding:6px 10px;
+  background:var(--gold);
+  border:0;
+  color:#201b10;
+  font:13px "PixelOperator", monospace;
+  border-radius:4px;
+  cursor:pointer;
+}
+
+#inventory-list { padding: 10px 12px 14px; border-top: 1px solid #3f3a29; }
+#inventory-list h3 { margin: 0 0 8px; color: var(--gold); font-size: 14px; font-weight: normal; }
+.inventory-entry { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid #343c31; color: #ded6b9; font-size: 12px; }
+.inventory-entry button, #inventory-list > button { padding: 5px 7px; color: #201b10; border: 1px solid #9d864e; border-radius: 3px; background: #d9bd61; font: 11px "PixelOperator", monospace; cursor: pointer; }
+.inventory-entry button:disabled { color: #aaa58d; border-color: #555846; background: #30372e; cursor: default; }
+.skill-summary { margin: 10px 0 6px; color: #9fc5a0; font-size: 11px; line-height: 1.35; }
+#player-inspect-modal { width: min(500px, calc(100vw - 28px)); padding: 0; color: #fff8d4; border: 2px solid #8d7744; border-radius: 7px; background: #151d18; font: 15px "PixelOperator", monospace; }
+#player-inspect-list { display: grid; gap: 7px; padding: 12px; }
+.player-inspect-entry { padding: 10px; color: #ded6b9; border: 1px solid #4f4934; border-radius: 3px; background: #202822; text-align: left; font: 12px "PixelOperator", monospace; cursor: pointer; }
+.player-inspect-entry:hover { border-color: var(--gold); color: #fff2b0; }
+
+#class-select { padding: 10px; color: #fff8d4; border: 2px solid #806d40; border-radius: 2px; background: #0b130d; font: 14px "PixelOperator", monospace; }
+
+#save-button.saving { color: #fff2b0; animation: save-pulse 650ms ease-in-out infinite alternate; }
+#save-button.saved { color: #7ff0a0; border-color: #63c97e; }
+#save-button.failed { color: #ff9c88; border-color: #d56d5d; }
+
+@keyframes save-pulse { to { opacity: .55; } }
+
+.round-button[aria-pressed="true"] { color: var(--gold); border-color: var(--gold); }
+
+#toast {
+  position: fixed;
+  z-index: 6;
+  top: 88px;
+  left: 50%;
+  max-width: min(450px, 82vw);
+  padding: 8px 13px;
+  color: #fff8d4;
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(10,12,10,0.94), rgba(8,10,8,0.86));
+  box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+  opacity: 0;
+  transform: translate(-50%, -6px);
+  transition: opacity 180ms, transform 180ms;
+  pointer-events: none;
+  text-align: center;
+  font-size: 15px;
+}
+
+#toast.visible { opacity: 1; transform: translate(-50%, 0); }
+
+#rating-notice { position: fixed; z-index: 4; right: 12px; bottom: 8px; margin: 0; color: rgba(235, 225, 186, .65); font-size: 10px; pointer-events: none; }
+
+#loading, #death-screen {
+  position: fixed;
+  z-index: 8;
+  inset: 0;
+  display: block;
+  overflow: auto;
+  gap: 8px;
+  padding: max(24px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  color: #fff2b0;
+  background: linear-gradient(180deg, rgba(8,10,9,0.96), rgba(3,4,3,0.9));
+  text-align: center;
+  font-size: clamp(21px, 4vw, 34px);
+  letter-spacing: 1px;
+}
+
+#loading.done { opacity: 0; visibility: hidden; transition: opacity 450ms, visibility 450ms; }
+
+#death-screen { background: rgba(24, 5, 5, 0.72); }
+#death-screen[hidden] { display: none; }
+#death-screen small { color: #dfc6a5; font-size: 14px; }
+
+#chat-form {
+  position: fixed;
+  z-index: 7;
+  left: 50%;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  display: none;
+  width: min(470px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  border: 2px solid #806d40;
+  border-radius: 4px;
+  background: linear-gradient(180deg,#16221b,#0d120c);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+}
+
+#chat-form.open { display: flex; }
+
+#chat-input {
+  min-width: 0;
+  flex: 1;
+  padding: 11px 12px;
+  color: #fff8d4;
+  outline: none;
+  border: 0;
+  background: transparent;
+  font: 16px "PixelOperator", monospace;
+  touch-action: manipulation;
+}
+
+#chat-form button {
+  padding: 0 14px;
+  color: #201b10;
+  border: 0;
+  background: var(--gold);
+  font: 14px "PixelOperator", monospace;
+}
+
+#controls-hint {
+  position: fixed;
+  z-index: 3;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  left: 50%;
+  padding: 5px 9px;
+  color: rgba(255, 247, 207, 0.72);
+  border-radius: 3px;
+  background: rgba(12, 16, 13, 0.58);
+  transform: translateX(-50%);
+  pointer-events: none;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+#mobile-hint { display: none; }
+
+/* joystick for touch controls — pixel-art themed base + custom nipple styling */
+#joystick-zone {
+  position: fixed;
+  z-index: 6;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  width: 132px;
+  height: 132px;
+  touch-action: none;
+  pointer-events: auto;
+  display: none;
+  /* pixel-art base: checker / wood-like tile with inset border */
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.06)),
+    linear-gradient(135deg, #6b4e2d 25%, #5a4025 25% 50%, #6b4e2d 50% 75%, #5a4025 75%);
+  background-size: 48px 48px;
+  border-radius: 14px;
+  border: 3px solid rgba(14, 10, 8, 0.8);
+  box-shadow: 0 5px 0 rgba(0,0,0,0.45), inset 0 0 0 2px rgba(246,216,107,0.06);
+  padding: 10px;
+  display: none;
+  place-items: center;
+}
+
+/* show zone on small screens / touch */
+@media (max-width: 720px), (pointer: coarse) {
+  #joystick-zone { display: grid; }
+}
+
+/* nipple.js elements override for a pixel-art aesthetic */
+.nipple-base {
+  width: 110px !important;
+  height: 110px !important;
+  /* retro pixel-tile center with subtle paper noise and strong pixel border */
+  background:
+    linear-gradient(180deg,#15231a 0%, #0f1a15 100%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0 2px, transparent 2px 4px);
+  background-blend-mode: overlay;
+  border-radius: 12px !important;
+  /* chunky pixel outline */
+  box-shadow:
+    0 6px 0 rgba(0,0,0,0.55),
+    inset 0 0 0 2px rgba(0,0,0,0.28),
+    0 0 0 3px rgba(30,24,18,0.9);
+  border: none !important;
+  image-rendering: pixelated;
+  transform: translateZ(0);
+  position: relative;
+  overflow: hidden;
+}
+
+/* pixel grid accent inside the base (subtle) */
+.nipple-base::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 8px;
+  background-image:
+    linear-gradient(0deg, rgba(0,0,0,0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 12px 12px, 12px 12px;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
+/* the stick (knob) reimagined as a chunky 8-bit square puck with pixel border */
+.nipple {
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: 6px !important;
+  background:
+    linear-gradient(180deg, #ffeaa8 0%, #e6b545 70%);
+  /* hard pixel outline using multiple shadows for an 8-bit look */
+  box-shadow:
+    0 5px 0 rgba(0,0,0,0.55),
+    inset 0 -4px 0 rgba(0,0,0,0.12),
+    2px 0 0 rgba(20,14,6,0.95),
+    -2px 0 0 rgba(20,14,6,0.95),
+    0 2px 0 rgba(20,14,6,0.95),
+    0 -2px 0 rgba(20,14,6,0.95);
+  image-rendering: pixelated;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  transition: transform 80ms linear;
+  isolation: isolate;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center;
+}
+
+/* pixel crosshair inside the knob built from small square blocks */
+.nipple > i {
+  width: 14px;
+  height: 14px;
+  display: block;
+  background: linear-gradient(#281e10, #1b1206);
+  box-shadow:
+    6px 0 0 #281e10,
+    -6px 0 0 #281e10,
+    0 6px 0 #281e10,
+    0 -6px 0 #281e10,
+    12px 0 0 #1b1206,
+    -12px 0 0 #1b1206,
+    0 12px 0 #1b1206,
+    0 -12px 0 #1b1206;
+  border: 2px solid rgba(255,255,255,0.06);
+  image-rendering: pixelated;
+  transform: translateZ(0);
+}
+
+/* pressed state: puck goes slightly inset and darkens for tactile feedback */
+.nipple.pressed {
+  transform: translate(calc(-50% + 0px), calc(-50% + 2px)) scale(0.96);
+  filter: brightness(0.96);
+  box-shadow:
+    0 2px 0 rgba(0,0,0,0.55),
+    inset 0 -6px 0 rgba(0,0,0,0.18);
+}
+
+/* ensure joystick remains touch-sized on mobile */
+@media (max-width: 420px) {
+  #joystick-zone { width: 118px; height: 118px; padding: 8px; border-radius: 12px; }
+  .nipple-base { width: 98px !important; height: 98px !important; border-radius: 10px !important; }
+  .nipple { width: 48px !important; height: 48px !important; border-radius: 6px !important; }
+}
+
+@media (max-width: 720px), (pointer: coarse) {
+  #joystick-zone { display: grid; }
+}
+
+#instructions-modal, #map-modal {
+  width: min(430px, calc(100vw - 28px));
+  padding: 0;
+  color: #fff8d4;
+  border: 2px solid #8d7744;
+  border-radius: 7px;
+  background: #151d18;
+  box-shadow: 0 7px 0 rgba(0, 0, 0, .38), inset 0 0 0 1px rgba(255, 235, 165, .08);
+  font: 15px "PixelOperator", monospace;
+}
+
+#instructions-modal::backdrop, #map-modal::backdrop { background: rgba(5, 8, 6, .78); }
+
+.modal-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 15px 10px;
+  border-bottom: 1px solid #4c452f;
+}
+
+.modal-top h2 { margin: 0; color: var(--gold); font-size: 21px; font-weight: normal; }
+
+#instructions-close, #map-close, #hint-close {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: #d8cfae;
+  border: 0;
+  background: transparent;
+  font: 22px "PixelOperator", monospace;
+  cursor: pointer;
+}
+
+#map-modal { width: min(510px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); }
+#map-modal .modal-top small { display: block; margin-top: 3px; color: #bdb394; font-size: 11px; }
+
+#map-frame {
+  position: relative;
+  height: min(63dvh, 650px);
+  padding: 8px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: #0d120f;
+  box-shadow: inset 0 0 0 1px #3d4434;
+  scrollbar-color: #8d7744 #111713;
+}
+
+#world-map {
+  display: block;
+  width: 344px;
+  height: 628px;
+  margin: auto;
+  border: 2px solid #5e5133;
+  background: #151d18;
+  image-rendering: pixelated;
+  transform-origin: top left;
+  touch-action: pan-x pan-y;
+}
+
+#map-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #3f3a29;
+  background: #111713;
+}
+
+#map-controls button {
+  display: inline-flex;
+  min-height: 35px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 10px;
+  color: #e6ddbd;
+  border: 1px solid #675b3c;
+  border-radius: 4px;
+  background: #202a23;
+  font: 12px "PixelOperator", monospace;
+  cursor: pointer;
+}
+
+#map-controls button:active { transform: translateY(1px); }
+#map-controls button:hover { border-color: #d5b95d; color: #fff2b0; }
+#map-zoom-me { color: #241e10 !important; border-color: var(--gold) !important; background: var(--gold) !important; }
+
+#map-controls svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#map-zoom-level {
+  margin-left: auto;
+  min-width: 36px;
+  color: #bdb394;
+  text-align: right;
+  font-size: 12px;
+}
+
+#map-player-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  min-height: 39px;
+  padding: 10px 12px 12px;
+  color: #ded6b9;
+  font-size: 12px;
+}
+
+.map-player-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px;
+  color: #ded6b9;
+  border: 1px solid #4f4934;
+  border-radius: 4px;
+  background: #202822;
+  font: 11px "PixelOperator", monospace;
+  cursor: pointer;
+}
+.map-player-entry:hover { border-color: #b8a65d; }
+.map-player-dot { width: 9px; height: 9px; border: 2px solid #fff6d3; border-radius: 50%; }
+
+.instruction-list { padding: 5px 15px 2px; }
+
+.instruction-list p {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 8px;
+  margin: 12px 0;
+  line-height: 1.25;
+}
+
+.instruction-list b { color: #f6d86b; font-weight: normal; }
+.instruction-list span { color: #ded6b9; }
+
+#instructions-done {
+  display: block;
+  width: calc(100% - 30px);
+  margin: 8px 15px 15px;
+  padding: 10px;
+  color: #201b10;
+  border: 0;
+  border-radius: 3px;
+  background: var(--gold);
+  font: 15px "PixelOperator", monospace;
+  cursor: pointer;
+}
+
+@media (max-width: 720px), (pointer: coarse) {
+  .hud-card { min-width: 205px; top: 9px; left: 9px; }
+  #player-avatar { width: 36px; height: 36px; }
+  .name-row { font-size: 14px; }
+  .top-actions { top: 9px; right: 9px; grid-template-columns: repeat(4, 38px); grid-template-rows: 38px 38px; gap: 6px; }
+  .round-button { width: 38px; height: 38px; }
+  #chat-button { display: grid; place-items: center; }
+  #player-count { height: 38px; min-width: 41px; padding: 0 6px; }
+  #chat-form {
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: calc(100vw - 16px);
+  }
+  #chat-input { min-height: 46px; padding: 12px; }
+  #chat-form button { min-width: 68px; touch-action: manipulation; }
+  #controls-hint { display: none; }
+  #mobile-hint {
+    position: fixed;
+    z-index: 5;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: max(12px, env(safe-area-inset-left));
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 3px 10px;
+    max-width: 430px;
+    margin: auto;
+    padding: 10px 39px 10px 12px;
+    color: #ded6b9;
+    border: 1px solid rgba(246, 216, 107, .62);
+    border-radius: 6px;
+    background: rgba(18, 24, 20, .93);
+    box-shadow: 0 3px 0 rgba(0, 0, 0, .35);
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  #mobile-hint strong { grid-column: 1; color: var(--gold); font-size: 14px; }
+  #mobile-hint span { grid-column: 1; }
+  #hint-close { position: absolute; top: 3px; right: 4px; }
+  #hint-more {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    padding: 7px 8px;
+    color: #201b10;
+    border: 0;
+    border-radius: 3px;
+    background: var(--gold);
+    font: 11px "PixelOperator", monospace;
+  }
+
+  #mobile-hint.dismissed { display: none; }
+  .instruction-list p { grid-template-columns: 70px 1fr; }
+  #map-modal { max-height: calc(100dvh - 16px); }
+  #map-frame { height: calc(100dvh - 245px); min-height: 340px; }
+  #map-controls { gap: 5px; padding: 7px 8px; }
+  #map-controls button { min-height: 34px; padding: 0 8px; }
+  #map-zoom-me span { display: inline; }
+}
+
+@media (max-width: 360px) {
+  #map-zoom-me span { display: none; }
+}
+
+/* Visual polish: vignette, UI backdrop blur, and ensure pixel-art stays crisp */
+#game-shell::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9;
+  /* subtle vignette to focus the center */
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0) 38%, rgba(0,0,0,0.42) 100%);
+  mix-blend-mode: multiply;
+}
+
+/* give HUD panels a faint blur/backdrop to sit over the scene with depth */
+.hud-card, #map-modal, #instructions-modal {
+  backdrop-filter: blur(4px) saturate(1.03);
+  -webkit-backdrop-filter: blur(4px) saturate(1.03);
+}
+
+/* keep pixel art rendering preference explicit */
+#game, #world-map {
+  image-rendering: pixelated;
+}
+
+/* Compact status-first HUD */
+.hud-card {
+  min-width: 250px;
+  padding: 9px 12px 9px 9px;
+  border-color: rgba(246, 216, 107, .82);
+  background: linear-gradient(135deg, rgba(12, 20, 15, .94), rgba(27, 37, 27, .88));
+  pointer-events: auto;
+}
+#health-value, #player-progression {
+  display: block;
+  color: #b8c9a2;
+  font-size: 11px;
+  line-height: 1.3;
+}
+#health-value { float: right; margin-top: -17px; color: #f5c2a6; }
+#player-progression { margin-top: 4px; color: #f6d86b; }
+#player-count { cursor: pointer; }
+.round-button { transition: border-color 120ms ease, background 120ms ease, transform 120ms ease; }
+.round-button:hover, .round-button:focus-visible { border-color: var(--gold); background: #2b382d; }
+.round-button:active { transform: translateY(2px); }
+
+@media (max-width: 420px) {
+  .hud-card { min-width: 205px; padding-right: 9px; }
+  #health-value { font-size: 10px; }
+  #rating-notice { display: none; }
+}
+
+/* Improve small-screen landscape layout so mobile controls do not obstruct the view.
+   - Move joystick to the right-bottom corner in landscape and shrink it slightly.
+   - Reduce HUD prominence and compact top-actions to avoid overlap.
+   - Hide the mobile hint in landscape to prevent blocking the playfield.
+*/
+@media (max-width: 720px) and (orientation: landscape) {
+  /* compact joystick on the right so it doesn't cover the main action */
+  #joystick-zone {
+    left: auto;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: 104px;
+    height: 104px;
+    padding: 8px;
+    border-radius: 12px;
+    transition: transform 180ms ease;
+    transform: translateY(0);
+    opacity: 0.98;
+  }
+  .nipple-base { width: 90px !important; height: 90px !important; border-radius: 10px !important; }
+  .nipple { width: 44px !important; height: 44px !important; border-radius: 6px !important; }
+
+  /* make the HUD smaller and less obtrusive */
+  .hud-card {
+    min-width: 170px;
+    padding: 6px 8px;
+    top: max(8px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    opacity: 0.96;
+  }
+  #player-avatar { width: 34px; height: 34px; }
+
+  /* compact top actions into a single row and reduce button size */
+  .top-actions {
+    grid-template-columns: repeat(7, 36px);
+    grid-template-rows: 36px;
+    gap: 6px;
+    right: max(8px, env(safe-area-inset-right));
+    top: max(8px, env(safe-area-inset-top));
+  }
+  .round-button { width: 36px; height: 36px; }
+
+  /* hide mobile hint to avoid covering gameplay in landscape */
+  #mobile-hint { display: none !important; }
+
+  /* slightly increase canvas padding-safe behavior so important UI isn't overlapped */
+  #game { box-shadow: inset 0 0 30px rgba(0,0,0,0.45); }
+
+  /* ensure chat form doesn't overlap joystick */
+  #chat-form.open {
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 60px);
+  }
+}
+
+/* Title screen */
+#loading {
+  z-index: 20;
+  overflow: auto;
+  display: block;
+  padding: max(24px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  background:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+    radial-gradient(circle at 50% 38%, #294c3b 0, #15291f 42%, #080d0a 100%);
+  background-size: 8px 8px, 8px 8px, auto;
+}
+
+#loading-screen,
+#start-screen {
+  margin: 0 auto;
+}
+
+#loading-screen {
+  min-height: calc(100dvh - 48px);
+  align-content: center;
+}
+
+#start-screen {
+  position: relative;
+  width: min(430px, 100%);
+  padding: 34px 28px 28px;
+  color: #fff4bd;
+  border: 4px solid #b58a45;
+  outline: 4px solid #241c11;
+  background: linear-gradient(145deg, rgba(28,47,32,.98), rgba(11,21,15,.98));
+  box-shadow: 10px 10px 0 rgba(0,0,0,.42), inset 0 0 0 2px rgba(255,236,155,.12);
+  text-align: center;
+  image-rendering: pixelated;
+}
+
+.title-mark {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 13px;
+}
+
+.title-mark span {
+  width: 14px;
+  height: 14px;
+  border: 3px solid #241c11;
+  background: #e6b84e;
+  box-shadow: 0 0 0 2px #f8df86;
+}
+
+.title-mark span:nth-child(2) { transform: translateY(-7px); background: #d9534f; }
+.title-kicker { margin: 0 0 5px; color: #95c9a1; font-size: 12px; text-transform: uppercase; }
+#start-title { margin: 0; color: #f6d86b; font-size: clamp(27px, 7vw, 43px); font-weight: normal; line-height: 1.1; text-shadow: 4px 4px 0 #241c11; }
+#loading-status { min-height: 19px; margin: 14px 0 21px; color: #c9d6b1; font-size: 13px; }
+.loading-dots { display: inline-block; width: 20px; overflow: hidden; text-align: left; }
+
+#start-form { display: grid; gap: 8px; text-align: left; }
+#start-form label { color: #f6d86b; font-size: 13px; }
+.name-input-row { display: flex; gap: 7px; }
+#player-name-input {
+  min-width: 0;
+  flex: 1;
+  padding: 11px 12px;
+  color: #fff8d4;
+  border: 2px solid #806d40;
+  border-radius: 2px;
+  outline: none;
+  background: #0b130d;
+  font: 16px "PixelOperator", monospace;
+}
+#player-name-input:focus { border-color: #f6d86b; box-shadow: 0 0 0 2px rgba(246,216,107,.2); }
+#random-name { width: 46px; color: #201b10; border: 2px solid #f6d86b; border-radius: 2px; background: #e6b84e; font: 20px "PixelOperator", monospace; cursor: pointer; }
+.start-actions { display: grid; grid-template-columns: 1.4fr 1fr; gap: 8px; margin-top: 10px; }
+.start-actions button { min-height: 44px; border: 2px solid #b58a45; border-radius: 2px; font: 16px "PixelOperator", monospace; cursor: pointer; }
+#play-button { color: #201b10; background: #f6d86b; }
+#play-button:disabled { cursor: not-allowed; opacity: .45; }
+#quit-button { color: #dfd4ad; background: #263328; }
+#start-form button:active { transform: translateY(2px); }
+#name-error { min-height: 16px; margin: 2px 0 0; color: #ff9c88; font-size: 12px; text-align: center; }
+
+/* The joystick is mounted by game.js only on coarse pointers or small screens. */
+#joystick-zone { z-index: 10; }
+
+@media (pointer: fine) and (min-width: 721px) {
+  #joystick-zone { display: none !important; }
+}
+
+@media (max-width: 420px) {
+  #loading { padding: max(18px, env(safe-area-inset-top)) 10px max(18px, env(safe-area-inset-bottom)); }
+  #start-screen { padding: 27px 19px 22px; }
+  #start-title { font-size: 30px; }
+}
+
+/* Startup gate and alternate touch control layout. */
+#loading-screen { display: grid; gap: 10px; place-items: center; min-width: min(430px, 90vw); }
+#loading-screen h1 { margin: 0; color: var(--gold); font-size: clamp(30px, 8vw, 48px); font-weight: normal; text-shadow: 4px 4px 0 #241c11; }
+#loading-screen p { margin: 0; color: #c9d6b1; font-size: 15px; }
+#loading-screen small { color: #d7cfa8; font-size: 12px; line-height: 1.6; }
+#start-screen { display: none; }
+#start-screen.visible { display: block; }
+#safety-gate { margin: 0 0 20px; padding: 14px; border: 2px solid #b58a45; background: rgba(8, 15, 10, .72); }
+#safety-gate h2 { margin: 0 0 9px; color: #ffcf72; font-size: 19px; font-weight: normal; }
+#safety-gate p { margin: 0 0 13px; color: #ffd0b8; font-size: 13px; line-height: 1.45; }
+.safety-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.safety-actions button { min-height: 42px; border: 2px solid #b58a45; border-radius: 2px; font: 14px "PixelOperator", monospace; cursor: pointer; }
+#proceed-button { color: #201b10; background: var(--gold); }
+#dont-proceed-button { color: #dfd4ad; background: #263328; }
+#control-choice { display: grid; gap: 8px; margin: 15px 0 0; padding: 10px; border: 1px solid #806d40; color: #ded6b9; font-size: 12px; }
+#control-choice legend { padding: 0 5px; color: var(--gold); font-size: 13px; }
+#control-choice label { display: flex; align-items: center; gap: 8px; min-height: 28px; cursor: pointer; }
+#control-choice input { accent-color: var(--gold); }
+.hud-close, .hud-open { border: 0; cursor: pointer; font: 20px "PixelOperator", monospace; }
+.hud-close { pointer-events: auto; }
+.hud-close { position: absolute; top: 2px; right: 5px; width: 24px; height: 24px; color: #d7cfa8; background: transparent; }
+.hud-open { position: fixed; z-index: 5; top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); width: 38px; height: 38px; color: #fff2b0; border: 2px solid #806d40; border-radius: 50%; background: rgba(18, 24, 20, .94); }
+#dpad { position: fixed; z-index: 10; right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); gap: 5px; }
+#dpad button { width: 44px; height: 44px; color: #fff2b0; border: 2px solid #806d40; border-radius: 5px; background: rgba(18, 24, 20, .94); font: 18px "PixelOperator", monospace; touch-action: none; }
+#dpad button:nth-child(1) { grid-area: 1 / 2; }
+#dpad button:nth-child(2) { grid-area: 2 / 1; }
+#dpad button:nth-child(3) { grid-area: 2 / 2; }
+#dpad button:nth-child(4) { grid-area: 2 / 3; }
+#dpad button:active { color: #201b10; background: var(--gold); }
+#loading [hidden], #game-shell [hidden] { display: none !important; }
+
+@media (max-width: 420px) {
+  #loading-screen { min-width: 0; }
+  #safety-gate { padding: 11px; }
+  #start-screen { width: min(430px, calc(100vw - 20px)); }
+  #dpad { right: max(10px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); }
+}
+
+.hud-card {
+  position: fixed;
+  z-index: 4;
+  top: max(14px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 235px;
+  padding: 8px 11px 8px 8px;
+  color: #fff8d4;
+  border: 2px solid rgba(246, 216, 107, 0.62);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+#player-avatar {
+  width: 42px;
+  height: 42px;
+  object-fit: none;
+  object-position: left top;
+  border: 2px solid #604c28;
+  border-radius: 4px;
+  background: #263329;
+  image-rendering: pixelated;
+}
+
+#player-avatar.user-avatar { object-fit: cover; object-position: center; }
+
+.player-details { flex: 1; min-width: 0; }
+
+.name-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  font-size: 17px;
+  letter-spacing: 0.2px;
+}
+
+#player-name {
+  overflow: hidden;
+  max-width: 145px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 2px 2px #000;
+}
+
+#connection {
+  color: #8ee6a9;
+  font-size: 12px;
+}
+
+#connection.offline { color: #cabf9e; }
+
+.health-track {
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid #070a08;
+  background: #43201f;
+}
+
+#health-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(#f76d55, #c93831);
+  transition: width 150ms ease-out;
+}
+
+#equipment {
+  margin-top: 4px;
+  color: #cfc7a8;
+  font-size: 11px;
+}
+
+.top-actions {
+  position: fixed;
+  z-index: 5;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  display: grid;
+  grid-template-columns: 40px auto 40px;
+  grid-template-rows: 40px 40px;
+  gap: 8px;
+}
+
+.round-button {
+  width: 40px;
+  height: 40px;
+  color: #dccd9c;
+  border: 2px solid #6b5d3d;
+  border-radius: 50%;
+  background: rgba(18, 24, 20, 0.88);
+  font: 20px "PixelOperator", monospace;
+  cursor: pointer;
+}
+
+#info-button { font-size: 18px; }
+#info-button { grid-area: 1 / 1; }
+#sound-button { grid-area: 1 / 3; }
+#save-button { grid-area: 2 / 1; }
+#chat-button { display: grid; place-items: center; grid-area: 2 / 2; }
+#map-button { grid-area: 2 / 3; }
+
+#player-count {
+  grid-area: 1 / 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 45px;
+  height: 40px;
+  padding: 0 7px;
+  color: #fff2b0;
+  border: 2px solid #6b5d3d;
+  border-radius: 20px;
+  background: rgba(18, 24, 20, .88);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, .26);
+  font-size: 15px;
+}
+
+#player-count svg {
+  width: 15px;
+  height: 15px;
+  overflow: visible;
+  fill: #e2d6a8;
+  stroke: #e2d6a8;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#map-button svg, #save-button svg, #chat-button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* shop button uses currency glyph style */
+#shop-button { grid-area: 1 / 4; font-size: 18px; }
+
+/* shop modal styling */
+#shop-modal {
+  width: min(420px, calc(100vw - 28px));
+  padding: 0;
+  color: #fff8d4;
+  border: 2px solid #8d7744;
+  border-radius: 7px;
+  background: #151d18;
+  box-shadow: 0 7px 0 rgba(0, 0, 0, .38), inset 0 0 0 1px rgba(255, 235, 165, .04);
+  font: 15px "PixelOperator", monospace;
+}
+#shop-list .shop-entry {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:8px;
+  border:1px solid #3f3a29;
+  border-radius:6px;
+  background:#202822;
+}
+#shop-list .shop-entry button {
+  padding:6px 10px;
+  background:var(--gold);
+  border:0;
+  color:#201b10;
+  font:13px "PixelOperator", monospace;
+  border-radius:4px;
+  cursor:pointer;
+}
+
+#save-button.saving { color: #fff2b0; animation: save-pulse 650ms ease-in-out infinite alternate; }
+#save-button.saved { color: #7ff0a0; border-color: #63c97e; }
+#save-button.failed { color: #ff9c88; border-color: #d56d5d; }
+
+@keyframes save-pulse { to { opacity: .55; } }
+
+.round-button[aria-pressed="true"] { color: var(--gold); border-color: var(--gold); }
+
+#toast {
+  position: fixed;
+  z-index: 6;
+  top: 88px;
+  left: 50%;
+  max-width: min(450px, 82vw);
+  padding: 8px 13px;
+  color: #fff8d4;
+  border-radius: 4px;
+  background: rgba(11, 15, 12, 0.84);
+  box-shadow: 0 2px 0 #000;
+  opacity: 0;
+  transform: translate(-50%, -6px);
+  transition: opacity 180ms, transform 180ms;
+  pointer-events: none;
+  text-align: center;
+  font-size: 15px;
+}
+
+#toast.visible { opacity: 1; transform: translate(-50%, 0); }
+
+#loading, #death-screen {
+  position: fixed;
+  z-index: 8;
+  inset: 0;
+  display: block;
+  overflow: auto;
+  gap: 8px;
+  padding: max(24px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  color: #fff2b0;
+  background: #111714;
+  text-align: center;
+  font-size: clamp(21px, 4vw, 34px);
+  letter-spacing: 1px;
+}
+
+#loading.done { opacity: 0; visibility: hidden; transition: opacity 450ms, visibility 450ms; }
+
+#death-screen { background: rgba(24, 5, 5, 0.72); }
+#death-screen[hidden] { display: none; }
+#death-screen small { color: #dfc6a5; font-size: 14px; }
+
+#chat-form {
+  position: fixed;
+  z-index: 7;
+  left: 50%;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  display: none;
+  width: min(470px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  border: 2px solid #806d40;
+  border-radius: 4px;
+  background: #151d18;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, .35);
+}
+
+#chat-form.open { display: flex; }
+
+#chat-input {
+  min-width: 0;
+  flex: 1;
+  padding: 11px 12px;
+  color: #fff8d4;
+  outline: none;
+  border: 0;
+  background: transparent;
+  font: 16px "DepartureMono", monospace;
+  touch-action: manipulation;
+}
+
+#chat-form button {
+  padding: 0 14px;
+  color: #201b10;
+  border: 0;
+  background: var(--gold);
+  font: 14px "DepartureMono", monospace;
+}
+
+#controls-hint {
+  position: fixed;
+  z-index: 3;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  left: 50%;
+  padding: 5px 9px;
+  color: rgba(255, 247, 207, 0.72);
+  border-radius: 3px;
+  background: rgba(12, 16, 13, 0.58);
+  transform: translateX(-50%);
+  pointer-events: none;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+#mobile-hint { display: none; }
+
+/* joystick for touch controls — pixel-art themed base + custom nipple styling */
+#joystick-zone {
+  position: fixed;
+  z-index: 6;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  width: 132px;
+  height: 132px;
+  touch-action: none;
+  pointer-events: auto;
+  display: none;
+  /* pixel-art base: checker / wood-like tile with inset border */
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.06)),
+    linear-gradient(135deg, #6b4e2d 25%, #5a4025 25% 50%, #6b4e2d 50% 75%, #5a4025 75%);
+  background-size: 48px 48px;
+  border-radius: 14px;
+  border: 3px solid rgba(14, 10, 8, 0.8);
+  box-shadow: 0 5px 0 rgba(0,0,0,0.45), inset 0 0 0 2px rgba(246,216,107,0.06);
+  padding: 10px;
+  display: none;
+  place-items: center;
+}
+
+/* show zone on small screens / touch */
+@media (max-width: 720px), (pointer: coarse) {
+  #joystick-zone { display: grid; }
+}
+
+/* nipple.js elements override for a pixel-art aesthetic */
+.nipple-base {
+  width: 110px !important;
+  height: 110px !important;
+  /* retro pixel-tile center with subtle paper noise and strong pixel border */
+  background:
+    linear-gradient(180deg,#15231a 0%, #0f1a15 100%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0 2px, transparent 2px 4px);
+  background-blend-mode: overlay;
+  border-radius: 12px !important;
+  /* chunky pixel outline */
+  box-shadow:
+    0 6px 0 rgba(0,0,0,0.55),
+    inset 0 0 0 2px rgba(0,0,0,0.28),
+    0 0 0 3px rgba(30,24,18,0.9);
+  border: none !important;
+  image-rendering: pixelated;
+  transform: translateZ(0);
+  position: relative;
+  overflow: hidden;
+}
+
+/* pixel grid accent inside the base (subtle) */
+.nipple-base::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 8px;
+  background-image:
+    linear-gradient(0deg, rgba(0,0,0,0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 12px 12px, 12px 12px;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
+/* the stick (knob) reimagined as a chunky 8-bit square puck with pixel border */
+.nipple {
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: 6px !important;
+  background:
+    linear-gradient(180deg, #ffeaa8 0%, #e6b545 70%);
+  /* hard pixel outline using multiple shadows for an 8-bit look */
+  box-shadow:
+    0 5px 0 rgba(0,0,0,0.55),
+    inset 0 -4px 0 rgba(0,0,0,0.12),
+    2px 0 0 rgba(20,14,6,0.95),
+    -2px 0 0 rgba(20,14,6,0.95),
+    0 2px 0 rgba(20,14,6,0.95),
+    0 -2px 0 rgba(20,14,6,0.95);
+  image-rendering: pixelated;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  transition: transform 80ms linear;
+  isolation: isolate;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center;
+}
+
+/* pixel crosshair inside the knob built from small square blocks */
+.nipple > i {
+  width: 14px;
+  height: 14px;
+  display: block;
+  background: linear-gradient(#281e10, #1b1206);
+  box-shadow:
+    6px 0 0 #281e10,
+    -6px 0 0 #281e10,
+    0 6px 0 #281e10,
+    0 -6px 0 #281e10,
+    12px 0 0 #1b1206,
+    -12px 0 0 #1b1206,
+    0 12px 0 #1b1206,
+    0 -12px 0 #1b1206;
+  border: 2px solid rgba(255,255,255,0.06);
+  image-rendering: pixelated;
+  transform: translateZ(0);
+}
+
+/* pressed state: puck goes slightly inset and darkens for tactile feedback */
+.nipple.pressed {
+  transform: translate(calc(-50% + 0px), calc(-50% + 2px)) scale(0.96);
+  filter: brightness(0.96);
+  box-shadow:
+    0 2px 0 rgba(0,0,0,0.55),
+    inset 0 -6px 0 rgba(0,0,0,0.18);
+}
+
+/* ensure joystick remains touch-sized on mobile */
+@media (max-width: 420px) {
+  #joystick-zone { width: 118px; height: 118px; padding: 8px; border-radius: 12px; }
+  .nipple-base { width: 98px !important; height: 98px !important; border-radius: 10px !important; }
+  .nipple { width: 48px !important; height: 48px !important; border-radius: 6px !important; }
+}
+
+@media (max-width: 720px), (pointer: coarse) {
+  #joystick-zone { display: grid; }
+}
+
+#instructions-modal, #map-modal {
+  width: min(430px, calc(100vw - 28px));
+  padding: 0;
+  color: #fff8d4;
+  border: 2px solid #8d7744;
+  border-radius: 7px;
+  background: #151d18;
+  box-shadow: 0 7px 0 rgba(0, 0, 0, .38), inset 0 0 0 1px rgba(255, 235, 165, .08);
+  font: 15px "PixelOperator", monospace;
+}
+
+#instructions-modal::backdrop, #map-modal::backdrop { background: rgba(5, 8, 6, .78); }
+
+.modal-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 15px 10px;
+  border-bottom: 1px solid #4c452f;
+}
+
+.modal-top h2 { margin: 0; color: var(--gold); font-size: 21px; font-weight: normal; }
+
+#instructions-close, #map-close, #hint-close {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: #d8cfae;
+  border: 0;
+  background: transparent;
+  font: 22px "PixelOperator", monospace;
+  cursor: pointer;
+}
+
+#map-modal { width: min(510px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); }
+#map-modal .modal-top small { display: block; margin-top: 3px; color: #bdb394; font-size: 11px; }
+
+#map-frame {
+  position: relative;
+  height: min(63dvh, 650px);
+  padding: 8px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: #0d120f;
+  box-shadow: inset 0 0 0 1px #3d4434;
+  scrollbar-color: #8d7744 #111713;
+}
+
+#world-map {
+  display: block;
+  width: 344px;
+  height: 628px;
+  margin: auto;
+  border: 2px solid #5e5133;
+  background: #151d18;
+  image-rendering: pixelated;
+  transform-origin: top left;
+  touch-action: pan-x pan-y;
+}
+
+#map-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #3f3a29;
+  background: #111713;
+}
+
+#map-controls button {
+  display: inline-flex;
+  min-height: 35px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 10px;
+  color: #e6ddbd;
+  border: 1px solid #675b3c;
+  border-radius: 4px;
+  background: #202a23;
+  font: 12px "PixelOperator", monospace;
+  cursor: pointer;
+}
+
+#map-controls button:active { transform: translateY(1px); }
+#map-controls button:hover { border-color: #d5b95d; color: #fff2b0; }
+#map-zoom-me { color: #241e10 !important; border-color: var(--gold) !important; background: var(--gold) !important; }
+
+#map-controls svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#map-zoom-level {
+  margin-left: auto;
+  min-width: 36px;
+  color: #bdb394;
+  text-align: right;
+  font-size: 12px;
+}
+
+#map-player-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  min-height: 39px;
+  padding: 10px 12px 12px;
+  color: #ded6b9;
+  font-size: 12px;
+}
+
+.map-player-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px;
+  color: #ded6b9;
+  border: 1px solid #4f4934;
+  border-radius: 4px;
+  background: #202822;
+  font: 11px "PixelOperator", monospace;
+  cursor: pointer;
+}
+.map-player-entry:hover { border-color: #b8a65d; }
+.map-player-dot { width: 9px; height: 9px; border: 2px solid #fff6d3; border-radius: 50%; }
+
+.instruction-list { padding: 5px 15px 2px; }
+
+.instruction-list p {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 8px;
+  margin: 12px 0;
+  line-height: 1.25;
+}
+
+.instruction-list b { color: #f6d86b; font-weight: normal; }
+.instruction-list span { color: #ded6b9; }
+
+#instructions-done {
+  display: block;
+  width: calc(100% - 30px);
+  margin: 8px 15px 15px;
+  padding: 10px;
+  color: #201b10;
+  border: 0;
+  border-radius: 3px;
+  background: var(--gold);
+  font: 15px "PixelOperator", monospace;
+  cursor: pointer;
+}
+
+@media (max-width: 720px), (pointer: coarse) {
+  .hud-card { min-width: 205px; top: 9px; left: 9px; }
+  #player-avatar { width: 36px; height: 36px; }
+  .name-row { font-size: 14px; }
+  .top-actions { top: 9px; right: 9px; grid-template-columns: repeat(4, 38px); grid-template-rows: 38px 38px; gap: 6px; }
+  .round-button { width: 38px; height: 38px; }
+  #chat-button { display: grid; place-items: center; }
+  #player-count { height: 38px; min-width: 41px; padding: 0 6px; }
+  #chat-form {
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: calc(100vw - 16px);
+  }
+  #chat-input { min-height: 46px; padding: 12px; }
+  #chat-form button { min-width: 68px; touch-action: manipulation; }
+  #controls-hint { display: none; }
+  #mobile-hint {
+    position: fixed;
+    z-index: 5;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: max(12px, env(safe-area-inset-left));
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 3px 10px;
+    max-width: 430px;
+    margin: auto;
+    padding: 10px 39px 10px 12px;
+    color: #ded6b9;
+    border: 1px solid rgba(246, 216, 107, .62);
+    border-radius: 6px;
+    background: rgba(18, 24, 20, .93);
+    box-shadow: 0 3px 0 rgba(0, 0, 0, .35);
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  #mobile-hint strong { grid-column: 1; color: var(--gold); font-size: 14px; }
+  #mobile-hint span { grid-column: 1; }
+  #hint-close { position: absolute; top: 3px; right: 4px; }
+  #hint-more {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    padding: 7px 8px;
+    color: #201b10;
+    border: 0;
+    border-radius: 3px;
+    background: var(--gold);
+    font: 11px "PixelOperator", monospace;
+  }
+
+  #mobile-hint.dismissed { display: none; }
+  .instruction-list p { grid-template-columns: 70px 1fr; }
+  #map-modal { max-height: calc(100dvh - 16px); }
+  #map-frame { height: calc(100dvh - 245px); min-height: 340px; }
+  #map-controls { gap: 5px; padding: 7px 8px; }
+  #map-controls button { min-height: 34px; padding: 0 8px; }
+  #map-zoom-me span { display: inline; }
+}
+
+@media (max-width: 360px) {
+  #map-zoom-me span { display: none; }
+}
+
+/* Visual polish: vignette, UI backdrop blur, and ensure pixel-art stays crisp */
+#game-shell::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9;
+  /* subtle vignette to focus the center */
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0) 38%, rgba(0,0,0,0.42) 100%);
+  mix-blend-mode: multiply;
+}
+
+/* give HUD panels a faint blur/backdrop to sit over the scene with depth */
+.hud-card, #map-modal, #instructions-modal {
+  backdrop-filter: blur(4px) saturate(1.03);
+  -webkit-backdrop-filter: blur(4px) saturate(1.03);
+}
+
+/* keep pixel art rendering preference explicit */
+#game, #world-map {
+  image-rendering: pixelated;
+}
+
+/* Improve small-screen landscape layout so mobile controls do not obstruct the view.
+   - Move joystick to the right-bottom corner in landscape and shrink it slightly.
+   - Reduce HUD prominence and compact top-actions to avoid overlap.
+   - Hide the mobile hint in landscape to prevent blocking the playfield.
+*/
+@media (max-width: 720px) and (orientation: landscape) {
+  /* compact joystick on the right so it doesn't cover the main action */
+  #joystick-zone {
+    left: auto;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: 104px;
+    height: 104px;
+    padding: 8px;
+    border-radius: 12px;
+    transition: transform 180ms ease;
+    transform: translateY(0);
+    opacity: 0.98;
+  }
+  .nipple-base { width: 90px !important; height: 90px !important; border-radius: 10px !important; }
+  .nipple { width: 44px !important; height: 44px !important; border-radius: 6px !important; }
+
+  /* make the HUD smaller and less obtrusive */
+  .hud-card {
+    min-width: 170px;
+    padding: 6px 8px;
+    top: max(8px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    opacity: 0.96;
+  }
+  #player-avatar { width: 34px; height: 34px; }
+
+  /* compact top actions into a single row and reduce button size */
+  .top-actions {
+    grid-template-columns: repeat(7, 36px);
+    grid-template-rows: 36px;
+    gap: 6px;
+    right: max(8px, env(safe-area-inset-right));
+    top: max(8px, env(safe-area-inset-top));
+  }
+  .round-button { width: 36px; height: 36px; }
+
+  /* hide mobile hint to avoid covering gameplay in landscape */
+  #mobile-hint { display: none !important; }
+
+  /* slightly increase canvas padding-safe behavior so important UI isn't overlapped */
+  #game { box-shadow: inset 0 0 30px rgba(0,0,0,0.45); }
+
+  /* ensure chat form doesn't overlap joystick */
+  #chat-form.open {
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 60px);
+  }
+}

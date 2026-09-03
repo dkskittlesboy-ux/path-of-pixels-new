@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111714">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Path of Pixels is a browser-based multiplayer pixel RPG. Explore the world, fight creatures, collect loot, and play with other adventurers.">
+  <meta name="application-name" content="Path of Pixels">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Path of Pixels — Multiplayer RPG">
+  <meta property="og:description" content="Explore, fight, loot, and adventure together in Path of Pixels.">
+  <meta property="og:url" content="https://pixelofpaths.com">
+  <meta property="og:image" content="assets/img/favicon.png">
+
+  <!-- X / Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Path of Pixels — Multiplayer RPG">
+  <meta name="twitter:description" content="Explore, fight, loot, and adventure together in Path of Pixels.">
+  <meta name="twitter:image" content="assets/img/favicon.png">
+
+  <title>Path of Pixels — Multiplayer RPG</title>
+  <link rel="icon" href="assets/img/favicon.png" type="image/png">
+  <link rel="preload" href="assets/img/clotharmor.png" as="image">
+  <link rel="preload" href="assets/img/loot.png" as="image">
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <!-- Hidden Background Music Player -->
+  <audio id="bgm-player" loop>
+    <source src="assets/audio/bmg.mp3" type="audio/mpeg">
+    Your browser does not support the audio element.
+  </audio>
+
+  <a class="skip-link" href="#game">Skip to game</a>
+
+  <main
+    id="game-shell"
+    aria-label="Path of Pixels multiplayer game"
+    data-game="path-of-pixels"
+    data-version="1.0.0"
+  >
+    <!-- Game world -->
+    <canvas
+      id="game"
+      role="application"
+      aria-label="Path of Pixels game world"
+    ></canvas>
+
+    <!-- Player HUD -->
+    <section id="player-card" class="hud-card" aria-label="Player status">
+      <button id="hud-close" class="hud-close" type="button" aria-label="Hide player status" title="Hide player status">×</button>
+      <img
+        id="player-avatar"
+        src="assets/img/clotharmor.png"
+        width="48"
+        height="48"
+        alt="Player avatar"
+        decoding="async"
+        draggable="false"
+      >
+
+      <div class="player-details">
+        <div class="name-row">
+          <strong id="player-name">Adventurer</strong>
+          <span id="connection" class="offline" role="status" aria-live="polite">solo</span>
+        </div>
+
+        <div
+          class="health-track"
+          role="progressbar"
+          aria-label="Health"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="100"
+        >
+          <span id="health-fill"></span>
+        </div>
+        <span id="health-value">120 / 120</span>
+
+        <div id="equipment">Cloth · Training sword</div>
+        <div id="player-progression">Warrior · Lv 1 · 0/100 XP</div>
+
+        <div class="currency-row" aria-label="Coins">
+          <img
+            src="assets/img/loot.png"
+            width="16"
+            height="16"
+            alt=""
+            aria-hidden="true"
+            decoding="async"
+            draggable="false"
+          >
+          <span id="player-coins">0</span>
+        </div>
+      </div>
+    </section>
+    <button id="hud-open" class="hud-open" type="button" aria-label="Show player status" title="Show player status" hidden>♥</button>
+
+    <!-- Primary controls -->
+    <nav class="top-actions" aria-label="Game controls">
+      <button
+        id="info-button"
+        class="round-button"
+        type="button"
+        aria-label="How to play"
+        title="How to play"
+      >
+        i
+      </button>
+
+      <output
+        id="player-count"
+        aria-label="1 player online"
+        title="Players online"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+          <circle cx="12" cy="7" r="4"></circle>
+          <path d="M4.5 21c.5-5.2 3-8 7.5-8s7 2.8 7.5 8"></path>
+        </svg>
+        <span id="player-count-value">1</span>
+      </output>
+
+      <button
+        id="sound-button"
+        class="round-button"
+        type="button"
+        aria-label="Toggle sound"
+        aria-pressed="false"
+        title="Toggle sound"
+      >
+        ♪
+      </button>
+
+      <button
+        id="save-button"
+        class="round-button"
+        type="button"
+        aria-label="Save game now"
+        title="Save game"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+          <path d="M4 3h13l3 3v15H4z"></path>
+          <path d="M7 3v6h9V3M8 21v-7h8v7"></path>
+        </svg>
+      </button>
+
+      <button
+        id="chat-button"
+        class="round-button"
+        type="button"
+        aria-label="Open chat"
+        aria-controls="chat-form"
+        aria-expanded="false"
+        title="Chat"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+          <path d="M4 5h16v11H9l-5 4z"></path>
+          <path d="M8 9h8M8 12h5"></path>
+        </svg>
+      </button>
+
+      <button
+        id="map-button"
+        class="round-button"
+        type="button"
+        aria-label="Open world map"
+        title="World map"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+          <path d="m3 5 5-2 8 3 5-2v15l-5 2-8-3-5 2z"></path>
+          <path d="M8 3v15M16 6v15"></path>
+        </svg>
+      </button>
+
+      <button
+        id="shop-button"
+        class="round-button"
+        type="button"
+        aria-label="Open shop"
+        title="Shop"
+      >
+        🏪
+      </button>
+      <button id="inventory-button" class="round-button" type="button" aria-label="Open inventory" title="Inventory">▣</button>
+      <button id="pvp-button" class="round-button" type="button" aria-label="Enable player versus player combat" aria-pressed="false" title="PvP">⚔</button>
+    </nav>
+
+    <!-- Live feedback -->
+    <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- WebSocket compatibility fallback -->
+    <section id="no-websockets" class="fallback-screen" aria-live="assertive" hidden>
+      <h1>
+        <span class="left-ornament" aria-hidden="true"></span>
+        Your browser cannot run Path of Pixels
+        <span class="right-ornament" aria-hidden="true"></span>
+      </h1>
+      <p>
+        This game requires WebSocket support for multiplayer features.<br>
+        Please use a current version of Chrome, Firefox, Safari, Edge, or another modern browser.
+      </p>
+    </section>
+
+    <!-- Loading / lifecycle states -->
+    <div id="loading" role="status" aria-live="polite" aria-busy="true">
+      <section id="loading-screen" aria-labelledby="loading-title">
+        <p class="title-kicker">Whisperlight Studios</p>
+        <h1 id="loading-title">Path of Pixels</h1>
+        <p>Loading the realm<span class="loading-dots" aria-hidden="true">...</span></p>
+        <small>Developed by: Whisperlight Studios<br>Est. 2026</small>
+      </section>
+      <div id="start-screen" aria-labelledby="start-title">
+        <div class="title-mark" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <p class="title-kicker">A pixel adventure</p>
+        <h1 id="start-title">Path of Pixels</h1>
+        <section id="safety-gate" aria-labelledby="safety-title">
+          <h2 id="safety-title">Before you play</h2>
+          <p>Warning: This game contains fantasy violence and mild blood</p>
+          <div class="safety-actions">
+            <button id="proceed-button" type="button">Proceed</button>
+            <button id="dont-proceed-button" type="button">Don't Proceed</button>
+          </div>
+          <fieldset id="control-choice">
+            <legend>What would you like to choose?</legend>
+            <label><input type="radio" name="controlMode" value="joystick" checked> Joystick</label>
+            <label><input type="radio" name="controlMode" value="dpad"> D-Pad (Directional Pad)</label>
+          </fieldset>
+        </section>
+        <p id="loading-status">Preparing the realm<span class="loading-dots" aria-hidden="true">...</span></p>
+        <form id="start-form" novalidate hidden>
+          <label for="player-name-input">Enter your name</label>
+          <div class="name-input-row">
+            <input id="player-name-input" name="playerName" type="text" maxlength="18" autocomplete="nickname" spellcheck="false" required>
+            <button id="random-name" type="button" aria-label="Choose a random name" title="Random name">?</button>
+          </div>
+          <label for="class-select">Choose a class</label>
+          <select id="class-select" name="classId">
+            <option value="warrior">Warrior · durable melee</option>
+            <option value="ranger">Ranger · precise strikes</option>
+            <option value="mage">Mage · arcane power</option>
+          </select>
+          <div class="start-actions">
+            <button id="play-button" type="submit" disabled>Play</button>
+            <button id="quit-button" type="button">Quit</button>
+          </div>
+          <p id="name-error" role="alert" aria-live="assertive"></p>
+        </form>
+      </div>
+    </div>
+
+    <section id="death-screen" hidden aria-live="assertive" aria-label="Game over">
+      <span>Game Over!</span>
+      <small>You will return to the village…</small>
+    </section>
+
+    <!-- Chat -->
+    <form id="chat-form" autocomplete="off" aria-label="Send a chat message" novalidate>
+      <label class="sr-only" for="chat-input">Chat message</label>
+      <input
+        id="chat-input"
+        name="message"
+        type="text"
+        maxlength="90"
+        inputmode="text"
+        enterkeyhint="send"
+        autocapitalize="sentences"
+        autocomplete="off"
+        spellcheck="true"
+        aria-label="Chat message"
+        placeholder="Say something…"
+      >
+      <button type="submit">Send</button>
+    </form>
+
+    <!-- Desktop controls hint -->
+    <p id="controls-hint">
+      Click to move · Click creatures to fight them · Press Space to double jump
+    </p>
+
+    <!-- Mobile onboarding -->
+    <aside id="mobile-hint" aria-label="Quick instructions">
+      <button id="hint-close" type="button" aria-label="Dismiss instructions">×</button>
+      <strong>Tap to play</strong>
+      <span>Tap the ground to move. Tap creatures to fight and items to collect.</span>
+      <button id="hint-more" type="button">How to play</button>
+    </aside>
+
+    <aside id="joystick-zone" aria-label="Movement joystick"></aside>
+    <aside id="dpad" aria-label="Directional pad" hidden>
+      <button type="button" data-direction="up" aria-label="Move up">▲</button>
+      <button type="button" data-direction="left" aria-label="Move left">◀</button>
+      <button type="button" data-direction="down" aria-label="Move down">▼</button>
+      <button type="button" data-direction="right" aria-label="Move right">▶</button>
+    </aside>
+
+    <!-- How-to-play dialog -->
+    <dialog id="instructions-modal" aria-labelledby="instructions-title">
+      <div class="modal-top">
+        <h2 id="instructions-title">How to play</h2>
+        <button
+          id="instructions-close"
+          type="button"
+          aria-label="Close instructions"
+          title="Close"
+        >×</button>
+      </div>
+
+      <div class="instruction-list">
+        <p>
+          <b>Move</b>
+          <span>Click or tap the world to move. On desktop, use WASD or the arrow keys.</span>
+        </p>
+        <p>
+          <b>Fight</b>
+          <span>Select a creature. Your hero will move into range and attack.</span>
+        </p>
+        <p>
+          <b>Explore</b>
+          <span>Interact with people, chests, equipment, food, potions, and other world objects.</span>
+        </p>
+        <p>
+          <b>Save</b>
+          <span>Your progress can save automatically. Use the save button to trigger an immediate save.</span>
+        </p>
+        <p>
+          <b>Co-op</b>
+          <span>Multiplayer sessions can synchronize player identity, avatars, movement, chat, and combat.</span>
+        </p>
+        <p>
+          <b>Chat</b>
+          <span>Open chat with the chat button, or press Enter on a keyboard.</span>
+        </p>
+        <p>
+          <b>Jump</b>
+          <span>Press Space twice to hop forward two tiles.</span>
+        </p>
+      </div>
+
+      <button id="instructions-done" type="button">Got it</button>
+    </dialog>
+
+    <!-- World map dialog -->
+    <dialog id="map-modal" aria-labelledby="map-title">
+      <div class="modal-top">
+        <div>
+          <h2 id="map-title">World Map</h2>
+          <small id="map-status" aria-live="polite">Live player locations</small>
+        </div>
+        <button id="map-close" type="button" aria-label="Close map" title="Close">×</button>
+      </div>
+
+      <div id="map-controls" aria-label="Map controls">
+        <button id="map-zoom-me" type="button">
+          <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+            <circle cx="10" cy="10" r="6"></circle>
+            <path d="m14.5 14.5 6 6M10 7v6M7 10h6"></path>
+          </svg>
+          <span>Zoom to me</span>
+        </button>
+
+        <button id="map-zoom-out" type="button" aria-label="Zoom out" title="Zoom out">
+          <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+            <circle cx="10" cy="10" r="6"></circle>
+            <path d="m14.5 14.5 6 6M7 10h6"></path>
+          </svg>
+        </button>
+
+        <button id="map-fit" type="button">Fit</button>
+        <output id="map-zoom-level" aria-label="Map zoom level">1×</output>
+      </div>
+
+      <div id="map-frame">
+        <canvas
+          id="world-map"
+          aria-label="Path of Pixels world map with player locations"
+        ></canvas>
+      </div>
+
+      <div id="map-player-list" aria-label="Players shown on map"></div>
+    </dialog>
+
+    <!-- Shop dialog -->
+    <dialog id="shop-modal" aria-labelledby="shop-title">
+      <div class="modal-top">
+        <h2 id="shop-title">Shop</h2>
+        <button id="shop-close" type="button" aria-label="Close shop" title="Close">×</button>
+      </div>
+
+      <div id="shop-list" aria-live="polite">
+        <!-- Shop items are populated dynamically by js/game.js. -->
+      </div>
+
+      <div id="inventory-list" aria-label="Inventory"></div>
+
+      <div class="shop-footer">
+        <button id="shop-done" type="button">Close</button>
+      </div>
+    </dialog>
+
+    <dialog id="player-inspect-modal" aria-labelledby="player-inspect-title">
+      <div class="modal-top">
+        <h2 id="player-inspect-title">Players</h2>
+        <button id="player-inspect-close" type="button" aria-label="Close players" title="Close">×</button>
+      </div>
+      <div id="player-inspect-list" aria-live="polite"></div>
+    </dialog>
+    <p id="rating-notice">Rated Teen (Ages 13+) · Online Interactions Not Rated</p>
+  </main>
+
+  <noscript>
+    <div class="fallback-screen">
+      <h1>JavaScript is required</h1>
+      <p>Path of Pixels requires JavaScript to run the game client. Please enable JavaScript and reload the page.</p>
+    </div>
+  </noscript>
+
+  <!-- Small utility styles remain here so they work even before styles.css loads. -->
+  <style>
+    .sr-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+
+    .skip-link {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      z-index: 99999;
+      padding: 8px 12px;
+      border-radius: 6px;
+      transform: translateY(-150%);
+    }
+
+    .skip-link:focus {
+      transform: translateY(0);
+    }
+
+    dialog::backdrop {
+      background: rgb(0 0 0 / 0.72);
+      backdrop-filter: blur(3px);
+    }
+  </style>
+
+  <script type="module" src="js/game.js"></script>
+</body>
+</html>
