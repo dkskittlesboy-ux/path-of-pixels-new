@@ -134,13 +134,17 @@ export class MultiplayerBridge {
 
   async saveGameState(userId, state) {
     if (!userId) return false;
-    if (!this.room?.collection) return this.saveLocalAccount(userId, state);
+    if (!this.room?.collection) {
+      this.saveLocalAccount(userId, state);
+      return false;
+    }
     try {
       await this.room.collection(this.saveCollection).upsert({ id: userId, ...state, schemaVersion: this.protocolVersion });
       return true;
     } catch (error) {
-      console.warn("Cloud save failed; progress remains saved on this device.", error);
-      return this.saveLocalAccount(userId, state);
+      console.warn("Cloud save failed; trying device storage.", error);
+      this.saveLocalAccount(userId, state);
+      return false;
     }
   }
 
