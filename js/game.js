@@ -83,7 +83,7 @@ const LEVEL_TREE = {
   mage: ["Mana well", "Arcane spark", "Meteor"],
 };
 
-class BrowserQuest {
+export class BrowserQuest {
   constructor() {
     this.canvas = document.querySelector("#game");
     this.ctx = this.canvas.getContext("2d");
@@ -383,7 +383,6 @@ class BrowserQuest {
       ? nearestWalkable(this.world, Math.round(rawX), Math.round(rawY))
       : nearestWalkable(this.world, 18, 211);
     const armor = saved.armor;
-    const maxHp = 100 + Math.max(0, ARMORS.indexOf(armor)) * 18;
     Object.assign(this.player, {
       x: position.x,
       y: position.y,
@@ -392,11 +391,9 @@ class BrowserQuest {
       dir: ["up", "down", "left", "right"].includes(saved.dir) ? saved.dir : "down",
       armor,
       weapon: saved.weapon,
-      maxHp,
-      hp: Math.max(0, Math.min(maxHp, Number(saved.hp ?? maxHp))),
       alive: saved.alive !== false,
       respawnAt: Number(saved.respawnAt || 0),
-      coins: Number(saved.coins || this.player.coins || 0),
+      coins: Number(saved.coins ?? this.player.coins ?? 0),
       classId: RPG_CLASSES[saved.classId] ? saved.classId : "warrior",
       level: Math.max(1, Number(saved.level || 1)),
       xp: Math.max(0, Number(saved.xp || 0)),
@@ -408,7 +405,11 @@ class BrowserQuest {
       vitality: Math.max(1, Number(saved.vitality || 10)),
       dexterity: Math.max(1, Number(saved.dexterity || 10)),
     });
-    this.recalculateHealth(false);
+    this.recalculateHealth(true);
+    const savedHp = Number(saved.hp ?? this.player.maxHp);
+    this.player.hp = this.player.alive
+      ? Math.max(0, Math.min(this.player.maxHp, Number.isFinite(savedHp) ? savedHp : this.player.maxHp))
+      : 0;
     const buffRemaining = Math.max(0, Math.min(10000, Number(saved.fireBuffRemaining || 0)));
     this.fireBuffUntil = performance.now() + buffRemaining;
     this.path = [];
@@ -449,7 +450,10 @@ class BrowserQuest {
   writeLocalSave(state) {
     try {
       localStorage.setItem(this.localSaveKey(), JSON.stringify(state));
-    } catch { /* Storage can be unavailable in private browsing. */ }
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   markSaveDirty() {
@@ -465,7 +469,7 @@ class BrowserQuest {
       return false;
     }
     const state = this.captureSaveState();
-    this.writeLocalSave(state);
+    const localSaved = this.writeLocalSave(state);
     this.saveDirty = false;
     this.lastAutoSaveAt = state.savedAt;
     const button = document.querySelector("#save-button");
@@ -477,13 +481,14 @@ class BrowserQuest {
     let cloudSaved = false;
     try {
       cloudSaved = await request;
+      if (!cloudSaved && !localSaved) throw new Error("No save destination is available");
       this.flashSaveButton("saved");
       if (manual) this.showToast(cloudSaved ? "Game saved to your Websim profile" : "Game saved on this device");
     } catch (error) {
       this.saveDirty = true;
       this.flashSaveButton("failed");
       if (manual) this.showToast("Could not save progress", 2600);
-      console.warn("Save request failed; progress remains saved on this device.", error);
+      console.warn(localSaved ? "Cloud save failed; progress remains saved on this device." : "Progress could not be saved.", error);
       return false;
     } finally {
       if (this.saveInFlight === request) this.saveInFlight = null;
@@ -967,7 +972,7 @@ class BrowserQuest {
   }
 
   applyItem(kind, store = true) {
-    if (store && ITEM_KINDS.has(kind) && !this.player.inventory.includes(kind)) this.player.inventory.push(kind);
+    if (store && (WEAPONS.includes(kind) || ARMORS.includes(kind)) && !this.player.inventory.includes(kind)) this.player.inventory.push(kind);
     if (WEAPONS.includes(kind)) {
       if (WEAPONS.indexOf(kind) >= WEAPONS.indexOf(this.player.weapon)) {
         this.player.weapon = kind;
@@ -1068,7 +1073,7 @@ class BrowserQuest {
     const skillBonus = this.player.skills.length * 2;
     const damage = Math.round((8 + weaponRank * 6 + this.player.strength + buff + skillBonus + Math.floor(Math.random() * 5)) * classData.power);
     const hp = Math.max(0, state.hp - damage);
-    const nextState = hp > 0 ? { hp, hitAt: Date.now() } : { hp: 0, defeatedUntil: Date.now() + 18000, hitAt: Date.now() };
+    const nextState = hp > 0 ? { hp, defeatedUntil: null, hitAt: Date.now() } : { hp: 0, defeatedUntil: Date.now() + 18000, hitAt: Date.now() };
     this.setShared("mobs", mob.id, nextState);
     mob.hurtUntil = now + 190;
     this.bridge.send({ type: "attack", echo: true, mobId: mob.id, damage });
@@ -1472,7 +1477,7 @@ class BrowserQuest {
     const px = entity.x * TILE - this.camera.x / this.scale;
     const py = entity.y * TILE - this.camera.y / this.scale;
     if (px < -40 || py < -40 || px * this.scale > this.viewport.width + 40 || py * this.scale > this.viewport.height + 40) return;
-    const frame = Math.floor((time + entity.phase) / 145);
+    const frame = Math.floor((time + (entity.phase ?? 0)) / 145);
     let sprite = entity.kind;
     let animation = "idle_down";
     let flip = false;
@@ -1714,9 +1719,17 @@ class BrowserQuest {
       label.textContent = LABELS[kind] || kind;
       const equip = document.createElement("button");
       equip.type = "button";
-      equip.textContent = kind === this.player.weapon || kind === this.player.armor ? "Equipped" : "Equip";
+      equip.textContent = CONSUMABLES.has(kind) ? "Use" : kind === this.player.weapon || kind === this.player.armor ? "Equipped" : "Equip";
       equip.disabled = equip.textContent === "Equipped";
       equip.addEventListener("click", () => {
+        if (CONSUMABLES.has(kind)) {
+          const index = this.player.inventory.indexOf(kind);
+          if (index < 0 || !this.player.alive) return;
+          this.player.inventory.splice(index, 1);
+          this.applyItem(kind, false);
+          this.renderInventory();
+          return;
+        }
         if (WEAPONS.includes(kind)) this.player.weapon = kind;
         if (ARMORS.includes(kind)) this.player.armor = kind;
         this.recalculateHealth(false);
@@ -1797,6 +1810,7 @@ class BrowserQuest {
       // fallback: give as consumable
       this.applyItem(item.id);
     }
+    this.renderInventory();
     this.updateHud();
     this.markSaveDirty();
     this.publish(true);
@@ -1825,7 +1839,7 @@ class BrowserQuest {
     try {
       let sound = this.audio.get(name);
       if (!sound) {
-        sound = new Audio(`assets/audio/${name}.mp3`);
+        sound = new Audio(`assets/img/${name}.mp3`);
         sound.volume = 0.36;
         this.audio.set(name, sound);
       }
@@ -1870,10 +1884,3 @@ function newestSave(localSave, cloudSave) {
 function numberToKind(value) {
   return ({ 20: "firefox", 21: "clotharmor", 22: "leatherarmor", 23: "mailarmor", 24: "platearmor", 25: "redarmor", 26: "goldenarmor", 35: "flask", 36: "burger", 38: "firepotion", 39: "cake", 60: "sword1", 61: "sword2", 62: "redsword", 63: "goldensword", 64: "morningstar", 65: "axe", 66: "bluesword" })[value];
 }
-
-const game = new BrowserQuest();
-game.init().catch((error) => {
-  console.error(error);
-  const loading = document.querySelector("#loading");
-  loading.innerHTML = "<span>The realm could not be loaded</span><small>Check the console for details.</small>";
-});

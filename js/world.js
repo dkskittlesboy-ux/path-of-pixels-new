@@ -144,7 +144,7 @@ export class SpriteBank {
   async load(names) {
     await Promise.all(
       [...new Set(names)].map(async (name) => {
-        const config = await fetch(`assets/sprites/${name}.json`)
+        const config = await fetch(`${name}.json`)
           .then(checkResponse)
           .then((r) => r.json());
         const image = new Image();
